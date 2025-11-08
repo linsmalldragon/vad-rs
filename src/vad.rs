@@ -1,6 +1,7 @@
 use eyre::{bail, Result};
 use ndarray::{Array1, Array2, Array3, ArrayBase, Ix1, Ix3, OwnedRepr};
 use ort::session::Session;
+use ort::value::Value;
 use std::path::Path;
 
 use crate::{session, vad_result::VadResult};
@@ -33,38 +34,59 @@ impl Vad {
 
     pub fn compute(&mut self, samples: &[f32]) -> Result<VadResult> {
         let samples_tensor = Array2::from_shape_vec((1, samples.len()), samples.to_vec())?;
+
+        // Convert ndarray to Vec and create Value
+        let input_shape: Vec<i64> = samples_tensor.shape().iter().map(|&x| x as i64).collect();
+        let input_data: Vec<f32> = samples_tensor.iter().cloned().collect();
+        let input_value = Value::from_array((input_shape, input_data))?;
+
+        let sr_shape: Vec<i64> = self
+            .sample_rate_tensor
+            .shape()
+            .iter()
+            .map(|&x| x as i64)
+            .collect();
+        let sr_data: Vec<i64> = self.sample_rate_tensor.iter().cloned().collect();
+        let sr_value = Value::from_array((sr_shape, sr_data))?;
+
+        let h_shape: Vec<i64> = self.h_tensor.shape().iter().map(|&x| x as i64).collect();
+        let h_data: Vec<f32> = self.h_tensor.iter().cloned().collect();
+        let h_value = Value::from_array((h_shape, h_data))?;
+
+        let c_shape: Vec<i64> = self.c_tensor.shape().iter().map(|&x| x as i64).collect();
+        let c_data: Vec<f32> = self.c_tensor.iter().cloned().collect();
+        let c_value = Value::from_array((c_shape, c_data))?;
+
         let result = self.session.run(ort::inputs![
-            "input" => samples_tensor.view(),
-            "sr" => self.sample_rate_tensor.view(),
-            "h" => self.h_tensor.view(),
-            "c" => self.c_tensor.view()
-        ]?)?;
+            "input" => input_value,
+            "sr" => sr_value,
+            "h" => h_value,
+            "c" => c_value
+        ])?;
 
         // Update internal state tensors.
-        self.h_tensor = result
+        let (_, h_data) = result
             .get("hn")
             .unwrap()
             .try_extract_tensor::<f32>()
-            .unwrap()
-            .to_owned()
-            .into_shape_with_order((2, 1, 64))
+            .unwrap();
+        self.h_tensor = Array3::from_shape_vec((2, 1, 64), h_data.to_vec())
             .expect("Shape mismatch for h_tensor");
-        self.c_tensor = result
+
+        let (_, c_data) = result
             .get("cn")
             .unwrap()
             .try_extract_tensor::<f32>()
-            .unwrap()
-            .to_owned()
-            .into_shape_with_order((2, 1, 64))
-            .expect("Shape mismatch for h_tensor");
+            .unwrap();
+        self.c_tensor = Array3::from_shape_vec((2, 1, 64), c_data.to_vec())
+            .expect("Shape mismatch for c_tensor");
 
-        let prob = *result
+        let (_, prob_data) = result
             .get("output")
             .unwrap()
             .try_extract_tensor::<f32>()
-            .unwrap()
-            .first()
             .unwrap();
+        let prob = prob_data[0];
         Ok(VadResult { prob })
     }
 

@@ -17,6 +17,7 @@ fn main() {
 
     let mut reader = WavReader::open(audio_path).unwrap();
     let spec = reader.spec();
+    println!("spec: {:?}", spec);
     let mut vad = Vad::new(model_path, spec.sample_rate.try_into().unwrap()).unwrap();
 
     let chunk_size = (0.1 * spec.sample_rate as f32) as usize; // 0.1s
@@ -33,7 +34,7 @@ fn main() {
     samples.extend(vec![0.0; sample_rate as usize]);
 
     for (i, chunk) in samples.chunks(chunk_size).enumerate() {
-        let time = i as f32 * chunk_size as f32 / sample_rate;
+        let time: f32 = i as f32 * chunk_size as f32 / sample_rate;
 
         if let Ok(mut result) = vad.compute(chunk) {
             match result.status() {

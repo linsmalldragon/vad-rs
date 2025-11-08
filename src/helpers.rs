@@ -19,7 +19,7 @@ pub fn audio_resample(
 }
 
 pub fn stereo_to_mono(stereo_data: &[f32]) -> Result<Vec<f32>> {
-    if stereo_data.len() % 2 != 0 {
+    if !stereo_data.len().is_multiple_of(2) {
         bail!("Stereo data length should be even.")
     }
 
