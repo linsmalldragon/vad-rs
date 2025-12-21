@@ -18,11 +18,11 @@ use ort::execution_providers::DirectMLExecutionProvider;
 #[cfg(feature = "openvino")]
 use ort::execution_providers::OpenVINOExecutionProvider;
 
-/// Creates an ONNX Runtime session with automatic GPU detection.
+/// Creates an ONNX Runtime session with automatic GPU detection and CPU fallback.
 ///
 /// The function tries GPU execution providers in priority order and automatically
-/// falls back to CPU if no GPU is available. ONNX Runtime handles the fallback
-/// gracefully - if a provider fails to initialize, it continues to the next one.
+/// falls back to CPU if GPU initialization fails. This is a graceful fallback
+/// that handles cases where the model is not fully compatible with GPU providers.
 ///
 /// Priority order:
 /// 1. TensorRT (NVIDIA GPU - most optimized)
@@ -32,10 +32,24 @@ use ort::execution_providers::OpenVINOExecutionProvider;
 /// 5. OpenVINO (Intel CPU/GPU/NPU)
 /// 6. CPU (always available)
 pub fn create_session<P: AsRef<Path>>(path: P) -> Result<Session> {
+    // Try GPU first, fall back to CPU if it fails
+    match try_create_session_with_gpu(path.as_ref()) {
+        Ok(session) => Ok(session),
+        Err(gpu_err) => {
+            eprintln!(
+                "GPU execution provider failed, falling back to CPU: {}",
+                gpu_err
+            );
+            create_cpu_session(path.as_ref())
+        }
+    }
+}
+
+/// Try to create a session with GPU acceleration
+fn try_create_session_with_gpu(path: &Path) -> Result<Session> {
     let builder = Session::builder()?.with_optimization_level(GraphOptimizationLevel::Level3)?;
 
     // Collect all available execution providers
-    // ONNX Runtime will try each one in order and use the first that works
     #[allow(unused_mut)]
     let mut providers: Vec<ort::execution_providers::ExecutionProviderDispatch> = Vec::new();
 
@@ -47,7 +61,7 @@ pub fn create_session<P: AsRef<Path>>(path: P) -> Result<Session> {
     #[cfg(feature = "cuda")]
     providers.push(CUDAExecutionProvider::default().build());
 
-    // Apple CoreML (macOS/iOS)
+    // Apple CoreML (macOS/iOS) - Note: Some ONNX ops may not be supported
     #[cfg(feature = "coreml")]
     providers.push(
         CoreMLExecutionProvider::default()
@@ -63,19 +77,26 @@ pub fn create_session<P: AsRef<Path>>(path: P) -> Result<Session> {
     #[cfg(feature = "openvino")]
     providers.push(OpenVINOExecutionProvider::default().build());
 
-    // Register all providers - ONNX Runtime will automatically use the first available
-    let session = if !providers.is_empty() {
-        builder
-            .with_execution_providers(providers)?
-            .with_intra_threads(4)?
-            .commit_from_file(path.as_ref())?
-    } else {
-        // CPU-only fallback with multi-threading
-        builder
-            .with_intra_threads(4)?
-            .commit_from_file(path.as_ref())?
-    };
+    if providers.is_empty() {
+        // No GPU providers available, use CPU
+        return create_cpu_session(path);
+    }
 
+    // Register all providers - ONNX Runtime will use the first available
+    let session = builder
+        .with_execution_providers(providers)?
+        .with_intra_threads(4)?
+        .commit_from_file(path)?;
+
+    Ok(session)
+}
+
+/// Create a CPU-only session (fallback)
+fn create_cpu_session(path: &Path) -> Result<Session> {
+    let session = Session::builder()?
+        .with_optimization_level(GraphOptimizationLevel::Level3)?
+        .with_intra_threads(4)?
+        .commit_from_file(path)?;
     Ok(session)
 }
 
@@ -111,13 +132,7 @@ pub fn create_session_with_provider<P: AsRef<Path>>(
 ) -> Result<Session> {
     match provider {
         ExecutionProvider::Auto => create_session(path),
-        ExecutionProvider::Cpu => {
-            let session = Session::builder()?
-                .with_optimization_level(GraphOptimizationLevel::Level3)?
-                .with_intra_threads(4)?
-                .commit_from_file(path.as_ref())?;
-            Ok(session)
-        }
+        ExecutionProvider::Cpu => create_cpu_session(path.as_ref()),
         #[cfg(feature = "coreml")]
         ExecutionProvider::CoreML => {
             let session = Session::builder()?
