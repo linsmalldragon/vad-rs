@@ -25,6 +25,24 @@ once_cell = "1.21.3"
 [features]
 default = ["helpers"]
 helpers = ["dep:ebur128", "dep:samplerate"]
+# Apple GPU/Neural Engine (macOS/iOS)
 coreml = ["ort/coreml"]
+# NVIDIA GPU (requires CUDA 11.6+)
+cuda = ["ort/cuda"]
+# NVIDIA GPU optimized (requires TensorRT)
+tensorrt = ["ort/tensorrt"]
+# Windows DirectX 12 GPU (AMD/Intel/NVIDIA)
 directml = ["ort/directml"]
+# Intel CPU/GPU/NPU optimization
+openvino = ["ort/openvino"]
+# Dynamic library loading
 load-dynamic = ["ort/load-dynamic"]
+# Enable all GPU backends for automatic detection
+# Use this when building a universal binary
+gpu = ["coreml", "cuda", "tensorrt", "directml", "openvino"]
+# macOS-optimized build
+gpu-macos = ["coreml"]
+# Windows-optimized build (AMD/Intel/NVIDIA)
+gpu-windows = ["directml", "cuda", "tensorrt", "openvino"]
+# Linux NVIDIA build
+gpu-nvidia = ["cuda", "tensorrt"]
