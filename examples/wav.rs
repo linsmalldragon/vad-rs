@@ -10,10 +10,10 @@ use vad_rs::{Vad, VadStatus};
 fn main() {
     let model_path = std::env::args()
         .nth(1)
-        .expect("Please specify model filename");
+        .unwrap_or_else(|| "examples/silero_vad.onnx".to_string());
     let audio_path = std::env::args()
         .nth(2)
-        .expect("Please specify audio filename");
+        .unwrap_or_else(|| "examples/Chinese.wav".to_string());
 
     let mut reader = WavReader::open(audio_path).unwrap();
     let spec = reader.spec();

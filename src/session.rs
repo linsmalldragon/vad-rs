@@ -4,7 +4,10 @@ use eyre::Result;
 use ort::session::{builder::GraphOptimizationLevel, Session};
 
 #[cfg(feature = "coreml")]
-use ort::execution_providers::CoreMLExecutionProvider;
+#[cfg(feature = "coreml")]
+use ort::execution_providers::coreml::{
+    CoreMLComputeUnits, CoreMLExecutionProvider, CoreMLModelFormat,
+};
 
 #[cfg(feature = "cuda")]
 use ort::execution_providers::CUDAExecutionProvider;
@@ -65,7 +68,8 @@ fn try_create_session_with_gpu(path: &Path) -> Result<Session> {
     #[cfg(feature = "coreml")]
     providers.push(
         CoreMLExecutionProvider::default()
-            .with_subgraphs(true)
+            .with_compute_units(CoreMLComputeUnits::All)
+            .with_model_format(CoreMLModelFormat::NeuralNetwork)
             .build(),
     );
 
@@ -138,7 +142,8 @@ pub fn create_session_with_provider<P: AsRef<Path>>(
             let session = Session::builder()?
                 .with_optimization_level(GraphOptimizationLevel::Level3)?
                 .with_execution_providers([CoreMLExecutionProvider::default()
-                    .with_subgraphs(true)
+                    .with_compute_units(CoreMLComputeUnits::All)
+                    .with_model_format(CoreMLModelFormat::NeuralNetwork)
                     .build()])?
                 .with_intra_threads(4)?
                 .commit_from_file(path.as_ref())?;
