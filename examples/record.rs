@@ -65,7 +65,7 @@ fn main() -> Result<()> {
         .default_input_device()
         .expect("failed to find input device");
 
-    println!("Input device: {}", device.name()?);
+    println!("Input device: {}", device.description()?);
 
     let config = device
         .default_input_config()
@@ -75,12 +75,12 @@ fn main() -> Result<()> {
     // A flag to indicate that recording is in progress.
     println!("Begin recording...");
 
-    let sample_rate = config.sample_rate().0;
+    let sample_rate = config.sample_rate();
     let channels = config.channels();
 
     // Loudness normalization
 
-    let normalizer = Normalizer::new(config.channels().into(), config.sample_rate().0);
+    let normalizer = Normalizer::new(config.channels().into(), config.sample_rate());
     *NORMALIZER.lock().unwrap() = Some(normalizer);
 
     let stream = match config.sample_format() {
