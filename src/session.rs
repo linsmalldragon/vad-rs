@@ -6,7 +6,8 @@ use ort::session::{builder::GraphOptimizationLevel, Session};
 #[cfg(feature = "coreml")]
 #[cfg(feature = "coreml")]
 use ort::execution_providers::coreml::{
-    CoreMLComputeUnits, CoreMLExecutionProvider, CoreMLModelFormat,
+    ComputeUnits as CoreMLComputeUnits, CoreML as CoreMLExecutionProvider,
+    ModelFormat as CoreMLModelFormat,
 };
 
 #[cfg(feature = "cuda")]
